@@ -2,6 +2,7 @@ from typing import List, Dict
 from enum import Enum
 from abc import ABC, abstractmethod
 
+# ------------------ ENUMS ------------------ #
 class SeatType(Enum):
     GOLD = "gold"
     PREMIUM = "premium"
@@ -10,6 +11,7 @@ class SeatStatus(Enum):
     BOOKED = "booked"
     AVAILABLE = "available"
 
+# ------------------ USERS ------------------ #
 class User:
     def __init__(self, id: str, name: str, contact_no: str):
         self.id = id
@@ -20,7 +22,7 @@ class Admin(User):
     def __init__(self, id: str, name: str, contact_no: str):
         super().__init__(id, name, contact_no)
         self.shows: List["Show"] = []
-        self.movies: List["Movie"] = []
+        self.movies: List["Movies"] = []
 
     def add_show(self, show: "Show"):
         self.shows.append(show)
@@ -28,10 +30,10 @@ class Admin(User):
     def remove_show(self, show: "Show"):
         self.shows.remove(show)
 
-    def add_movie(self, movie: "Movie"):
+    def add_movie(self, movie: "Movies"):
         self.movies.append(movie)
 
-    def remove_movie(self, movie: "Movie"):
+    def remove_movie(self, movie: "Movies"):
         self.movies.remove(movie)
 
 class Customer(User):
@@ -42,6 +44,7 @@ class Customer(User):
     def create_booking(self, booking: "Booking"):
         self.bookings[booking.id] = booking
 
+# ------------------ FACTORY PATTERN ------------------ #
 class UserFactory:
     @staticmethod
     def create_user(user_type: str, id: str, name: str, contact_no: str):
@@ -52,6 +55,7 @@ class UserFactory:
         else:
             raise ValueError("Invalid user type")
 
+# ------------------ STRATEGY PATTERN ------------------ #
 class PricingStrategy(ABC):
     @abstractmethod
     def get_price(self, base_price: float) -> float:
@@ -65,12 +69,14 @@ class PremiumPricingStrategy(PricingStrategy):
     def get_price(self, base_price: float) -> float:
         return base_price * 2
 
+# ------------------ BOOKING ------------------ #
 class Booking:
-    def __init__(self, id: str, seat: "Seat"):
+    def __init__(self, id: str, seat: int):
         self.id = id
         self.seat = seat
 
-class Movie:
+# ------------------ MOVIE ------------------ #
+class Movies:
     def __init__(self, id: str, name: str, title: str, duration: int, genre: str, shows: List["Show"]):
         self.id = id
         self.name = name
@@ -79,46 +85,35 @@ class Movie:
         self.genre = genre
         self.shows = shows
 
+# ------------------ BUILDER PATTERN ------------------ #
 class Show:
     def __init__(self):
         self.id = None
+        self.movie_id = None
         self.start_time = None
         self.end_time = None
         self.seats = None
 
 class ShowBuilder(ABC):
     @abstractmethod
-    def set_show_id(self, id: str):
-        pass
-
+    def set_show_id(self, id: str): pass
     @abstractmethod
-    def set_show_time(self, start_time: str, end_time: str):
-        pass
-
+    def set_show_time(self, start_time: str, end_time: str): pass
     @abstractmethod
-    def set_show_seats(self, seats: List["Seat"]):
-        pass
-
+    def set_show_seats(self, seats: List["Seat"]): pass
     @abstractmethod
-    def build(self):
-        pass
+    def build(self): pass
 
 class MovieShowBuilder(ShowBuilder):
     def __init__(self):
         self.show = Show()
 
-    def set_show_id(self, id: str):
-        self.show.id = id
-
+    def set_show_id(self, id: str): self.show.id = id
     def set_show_time(self, start_time: str, end_time: str):
         self.show.start_time = start_time
         self.show.end_time = end_time
-
-    def set_show_seats(self, seats: List["Seat"]):
-        self.show.seats = seats
-
-    def build(self):
-        return self.show
+    def set_show_seats(self, seats: List["Seat"]): self.show.seats = seats
+    def build(self): return self.show
 
 class Director:
     def __init__(self, builder: ShowBuilder):
@@ -130,8 +125,10 @@ class Director:
         self.builder.set_show_seats(seats)
         return self.builder.build()
 
+# ------------------ SEAT ------------------ #
 class Seat:
-    def __init__(self, id: str, row: int, col: int, seat_type: SeatType, status: SeatStatus, pricing_strategy: PricingStrategy):
+    def __init__(self, id: str, row: int, col: int, seat_type: SeatType,
+                 status: SeatStatus, pricing_strategy: PricingStrategy):
         self.id = id
         self.row = row
         self.col = col
@@ -142,12 +139,7 @@ class Seat:
     def get_price(self, base_price: float) -> float:
         return self.pricing_strategy.get_price(base_price)
 
-class Theater:
-    def __init__(self, id: str, shows: List["Show"], address: "Address"):
-        self.id = id
-        self.shows = shows
-        self.address = address
-
+# ------------------ THEATER ------------------ #
 class Address:
     def __init__(self, id: str, address_line: str, city: str, state: str, pin: int):
         self.id = id
@@ -156,57 +148,141 @@ class Address:
         self.state = state
         self.pin = pin
 
+class Theater:
+    def __init__(self, id: str, shows: List[Show], address: Address):
+        self.id = id
+        self.shows = shows
+        self.address = address
+
+# ------------------ SINGLETON ------------------ #
 class SingletonMeta(type):
-    _instance = {}
-
+    _instances = {}
     def __call__(cls, *args, **kwargs):
-        if cls not in cls._instance:
-            cls._instance[cls] = super().__call__(*args, **kwargs)
-        return cls._instance[cls]
+        if cls not in cls._instances:
+            cls._instances[cls] = super().__call__(*args, **kwargs)
+        return cls._instances[cls]
 
-class TheaterRegistry(metaclass=SingletonMeta):
+class TheaterService(metaclass=SingletonMeta):
     def __init__(self):
-        if hasattr(self, '_initialized') and self._initialized:
-            return
         self.theaters: Dict[str, Theater] = {}
-        self._initialized = True
 
     def add_theater(self, theater: Theater):
         self.theaters[theater.id] = theater
 
-    def get_theater(self, theater_id: str):
-        return self.theaters.get(theater_id)
+    def search_by_city(self, city: str) -> List[Theater]:
+        return [t for t in self.theaters.values() if t.address.city.lower() == city.lower()]
 
-if __name__ == "__main__":
-    # Create users
-    admin = UserFactory.create_user("admin", "1", "AdminUser", "9999999999")
-    customer = UserFactory.create_user("customer", "2", "CustUser", "8888888888")
+    def search_by_pin(self, pin: int) -> List[Theater]:
+        return [t for t in self.theaters.values() if t.address.pin == pin]
 
-    # Create seats
+class MovieService(metaclass=SingletonMeta):
+    def __init__(self):
+        self.movies: Dict[str, Movies] = {}
+
+    def add_movie(self, movie: Movies):
+        self.movies[movie.id] = movie
+
+    def search_by_name(self, name: str) -> List[Movies]:
+        return [m for m in self.movies.values() if m.name.lower() == name.lower()]
+
+    def search_by_genre(self, genre: str) -> List[Movies]:
+        return [m for m in self.movies.values() if m.genre.lower() == genre.lower()]
+
+class ShowService(metaclass=SingletonMeta):
+    def __init__(self):
+        self.shows: Dict[str, Show] = {}
+
+    def add_show(self, show: Show):
+        self.shows[show.id] = show
+
+    def search_by_movie(self, movie_id: str) -> List[Show]:
+        return [s for s in self.shows.values() if s.movie_id == movie_id]
+
+    def search_by_time(self, start_time: str) -> List[Show]:
+        return [s for s in self.shows.values() if s.start_time == start_time]
+
+# ------------------ FACADE ------------------ #
+class SearchFacade:
+    def __init__(self, movie_service, show_service, theater_service):
+        self.movie_service = movie_service
+        self.show_service = show_service
+        self.theater_service = theater_service
+
+    def search_movies_by_name(self, name: str):
+        return self.movie_service.search_by_name(name)
+
+    def search_movies_by_genre(self, genre: str):
+        return self.movie_service.search_by_genre(genre)
+
+    def search_shows_by_movie(self, movie_id: str):
+        return self.show_service.search_by_movie(movie_id)
+
+    def search_shows_by_time(self, start_time: str):
+        return self.show_service.search_by_time(start_time)
+
+    def search_theaters_by_city(self, city: str):
+        return self.theater_service.search_by_city(city)
+
+    def search_theaters_by_pin(self, pin: int):
+        return self.theater_service.search_by_pin(pin)
+
+
+def main():
+    # Create Admin and Customer using Factory
+    admin = UserFactory.create_user("admin", "A1", "AdminUser", "1234567890")
+    customer = UserFactory.create_user("customer", "C1", "CustomerUser", "9876543210")
+
+    # Create Seats
     seats = [
         Seat("S1", 1, 1, SeatType.GOLD, SeatStatus.AVAILABLE, GoldPricingStrategy()),
-        Seat("S2", 1, 2, SeatType.PREMIUM, SeatStatus.AVAILABLE, PremiumPricingStrategy())
+        Seat("S2", 1, 2, SeatType.PREMIUM, SeatStatus.AVAILABLE, PremiumPricingStrategy()),
     ]
 
-    # Build a show
+    # Build Show using Builder Pattern
     builder = MovieShowBuilder()
     director = Director(builder)
-    show = director.build_show("show1", "10:00", "12:00", seats)
+    show = director.build_show("SH1", "10:00", "12:30", seats)
 
-    # Add show and movie
+    # Create Movie
+    movie = Movies("M1", "Inception", "Inception", 148, "Sci-Fi", [show])
+
+    # Admin adds show and movie
     admin.add_show(show)
-    movie = Movie("M1", "Inception", "Inception", 150, "Sci-Fi", [show])
     admin.add_movie(movie)
 
-    # Register theater
-    address = Address("A1", "123 Main St", "Gotham", "NY", 12345)
+    # Register services using Singleton
+    movie_service = MovieService()
+    movie_service.add_movie(movie)
+
+    show_service = ShowService()
+    show.movie_id = movie.id  # important to link show to movie
+    show_service.add_show(show)
+
+    address = Address("ADDR1", "101 Movie Street", "Gotham", "NY", 10001)
     theater = Theater("T1", [show], address)
-    registry = TheaterRegistry()
-    registry.add_theater(theater)
 
-    # Customer books a seat
-    booking = Booking("B1", seats[0])
-    customer.create_booking(booking)
+    theater_service = TheaterService()
+    theater_service.add_theater(theater)
 
-    print("Customer bookings:", customer.bookings)
-    print("Theater from registry:", registry.get_theater("T1").id)
+    # Search Facade
+    facade = SearchFacade(movie_service, show_service, theater_service)
+
+    print("🔍 Searching for movie by name 'Inception'")
+    movies = facade.search_movies_by_name("Inception")
+    for m in movies:
+        print(f"🎬 Movie: {m.title}, Genre: {m.genre}, Duration: {m.duration} mins")
+
+    print("\n⏰ Searching shows by start time '10:00'")
+    shows = facade.search_shows_by_time("10:00")
+    for s in shows:
+        print(f"🎟️ Show ID: {s.id}, Start Time: {s.start_time}, End Time: {s.end_time}")
+        for seat in s.seats:
+            print(f"  💺 Seat {seat.id}: {seat.seat_type.value} - ₹{seat.get_price(200):.2f}, Status: {seat.status.name}")
+
+    print("\n🏢 Searching theaters in 'Gotham'")
+    theaters = facade.search_theaters_by_city("Gotham")
+    for t in theaters:
+        print(f"🎭 Theater ID: {t.id}, Address: {t.address.address_line}, City: {t.address.city}")
+
+if __name__ == "__main__":
+    main()
