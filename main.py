@@ -1,6 +1,7 @@
 from typing import List, Dict
 from enum import Enum
 from abc import ABC, abstractmethod
+import random
 
 # ------------------ ENUMS ------------------ #
 class SeatType(Enum):
@@ -44,7 +45,17 @@ class Customer(User):
     def create_booking(self, booking: "Booking"):
         self.bookings[booking.id] = booking
 
-# ------------------ FACTORY PATTERN ------------------ #
+    def cancel_booking(self, booking_id: str):
+        if booking_id in self.bookings:
+            booking = self.bookings[booking_id]
+            for seat in booking.seats:
+                seat.status = SeatStatus.AVAILABLE
+            del self.bookings[booking_id]
+            print(f"❎ Booking {booking_id} has been cancelled.")
+        else:
+            print(f"⚠️ No booking found with ID {booking_id}")
+
+# ------------------ FACTORY ------------------ #
 class UserFactory:
     @staticmethod
     def create_user(user_type: str, id: str, name: str, contact_no: str):
@@ -55,7 +66,7 @@ class UserFactory:
         else:
             raise ValueError("Invalid user type")
 
-# ------------------ STRATEGY PATTERN ------------------ #
+# ------------------ STRATEGY ------------------ #
 class PricingStrategy(ABC):
     @abstractmethod
     def get_price(self, base_price: float) -> float:
@@ -69,11 +80,23 @@ class PremiumPricingStrategy(PricingStrategy):
     def get_price(self, base_price: float) -> float:
         return base_price * 2
 
+# ------------------ PAYMENT SIMULATION ------------------ #
+class PaymentGateway:
+    @staticmethod
+    def process_payment(amount: float) -> bool:
+        print(f"💳 Processing payment of ₹{amount:.2f}...")
+        return random.choice([True, True, True, False])
+
 # ------------------ BOOKING ------------------ #
 class Booking:
-    def __init__(self, id: str, seat: int):
+    def __init__(self, id: str, customer: Customer, show: "Show", seats: List["Seat"], base_price: float):
         self.id = id
-        self.seat = seat
+        self.customer = customer
+        self.show = show
+        self.seats = seats
+        self.total_price = sum(seat.get_price(base_price) for seat in seats)
+        for seat in seats:
+            seat.status = SeatStatus.BOOKED
 
 # ------------------ MOVIE ------------------ #
 class Movies:
@@ -85,7 +108,7 @@ class Movies:
         self.genre = genre
         self.shows = shows
 
-# ------------------ BUILDER PATTERN ------------------ #
+# ------------------ BUILDER ------------------ #
 class Show:
     def __init__(self):
         self.id = None
@@ -154,7 +177,7 @@ class Theater:
         self.shows = shows
         self.address = address
 
-# ------------------ SINGLETON ------------------ #
+# ------------------ SINGLETON SERVICES ------------------ #
 class SingletonMeta(type):
     _instances = {}
     def __call__(cls, *args, **kwargs):
@@ -226,63 +249,77 @@ class SearchFacade:
     def search_theaters_by_pin(self, pin: int):
         return self.theater_service.search_by_pin(pin)
 
-
+# ------------------ MAIN ------------------ #
 def main():
-    # Create Admin and Customer using Factory
+    # Setup
     admin = UserFactory.create_user("admin", "A1", "AdminUser", "1234567890")
     customer = UserFactory.create_user("customer", "C1", "CustomerUser", "9876543210")
 
-    # Create Seats
     seats = [
         Seat("S1", 1, 1, SeatType.GOLD, SeatStatus.AVAILABLE, GoldPricingStrategy()),
         Seat("S2", 1, 2, SeatType.PREMIUM, SeatStatus.AVAILABLE, PremiumPricingStrategy()),
     ]
 
-    # Build Show using Builder Pattern
     builder = MovieShowBuilder()
     director = Director(builder)
     show = director.build_show("SH1", "10:00", "12:30", seats)
 
-    # Create Movie
     movie = Movies("M1", "Inception", "Inception", 148, "Sci-Fi", [show])
-
-    # Admin adds show and movie
     admin.add_show(show)
     admin.add_movie(movie)
 
-    # Register services using Singleton
-    movie_service = MovieService()
-    movie_service.add_movie(movie)
-
-    show_service = ShowService()
-    show.movie_id = movie.id  # important to link show to movie
-    show_service.add_show(show)
-
+    movie_service = MovieService(); movie_service.add_movie(movie)
+    show_service = ShowService(); show.movie_id = movie.id; show_service.add_show(show)
     address = Address("ADDR1", "101 Movie Street", "Gotham", "NY", 10001)
     theater = Theater("T1", [show], address)
+    theater_service = TheaterService(); theater_service.add_theater(theater)
 
-    theater_service = TheaterService()
-    theater_service.add_theater(theater)
-
-    # Search Facade
     facade = SearchFacade(movie_service, show_service, theater_service)
 
     print("🔍 Searching for movie by name 'Inception'")
-    movies = facade.search_movies_by_name("Inception")
-    for m in movies:
+    for m in facade.search_movies_by_name("Inception"):
         print(f"🎬 Movie: {m.title}, Genre: {m.genre}, Duration: {m.duration} mins")
 
     print("\n⏰ Searching shows by start time '10:00'")
-    shows = facade.search_shows_by_time("10:00")
-    for s in shows:
+    for s in facade.search_shows_by_time("10:00"):
         print(f"🎟️ Show ID: {s.id}, Start Time: {s.start_time}, End Time: {s.end_time}")
         for seat in s.seats:
             print(f"  💺 Seat {seat.id}: {seat.seat_type.value} - ₹{seat.get_price(200):.2f}, Status: {seat.status.name}")
 
     print("\n🏢 Searching theaters in 'Gotham'")
-    theaters = facade.search_theaters_by_city("Gotham")
-    for t in theaters:
+    for t in facade.search_theaters_by_city("Gotham"):
         print(f"🎭 Theater ID: {t.id}, Address: {t.address.address_line}, City: {t.address.city}")
+
+    # Booking
+    base_price = 200.0
+    print("\n🧾 Customer trying to book an available seat...")
+
+    available_seats = [seat for seat in show.seats if seat.status == SeatStatus.AVAILABLE]
+    if available_seats:
+        selected_seats = [available_seats[0]]
+        total_price = sum(seat.get_price(base_price) for seat in selected_seats)
+
+        if PaymentGateway.process_payment(total_price):
+            booking = Booking("B1", customer, show, selected_seats, base_price)
+            customer.create_booking(booking)
+            print(f"✅ Booking Successful! Booking ID: {booking.id}")
+            print(f"   🎫 Seats Booked: {[seat.id for seat in booking.seats]}")
+            print(f"   💰 Total Price: ₹{booking.total_price:.2f}")
+        else:
+            print("❌ Payment failed. Booking not completed.")
+    else:
+        print("❌ No available seats to book.")
+
+    print("\n📄 Customer Booking History:")
+    for b_id, b in customer.bookings.items():
+        print(f"🆔 {b_id} | Show: {b.show.id} | Seats: {[s.id for s in b.seats]} | Total: ₹{b.total_price:.2f}")
+
+    print("\n🔄 Cancelling booking 'B1'...")
+    customer.cancel_booking("B1")
+
+    print("\n📄 Updated Booking History:")
+    for b_id, b in customer.bookings.items():
+        print(f"🆔 {b_id} | Show: {b.show.id} | Seats: {[s.id for s in b.seats]} | Total: ₹{b.total_price:.2f}")
 
 if __name__ == "__main__":
     main()
